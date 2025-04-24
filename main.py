@@ -6,6 +6,7 @@ import logging
 import os
 import base64
 import pickle
+import time
 import cv2
 import numpy as np
 import pandas as pd
@@ -114,6 +115,9 @@ mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 mp_holistic = mp.solutions.holistic
 
+# Global gesture cache for cooldown implementation
+gesture_cache = {}
+
 # Initialize face mesh with high accuracy settings
 face_mesh = mp_face_mesh.FaceMesh(
     static_image_mode=True,
@@ -176,10 +180,15 @@ def verify_user_identity(image):
         # Process the image with MediaPipe Holistic
         results = holistic.process(rgb_image)
         
-        # Check if both face and pose were detected
-        if not results.face_landmarks or not results.pose_landmarks:
-            logging.warning("Face or body pose not detected with MediaPipe Holistic")
-            return False
+        # Check if face landmarks were detected
+        if not results.face_landmarks:
+            logging.warning("Face not detected with MediaPipe Holistic - please ensure your face is fully visible in the camera")
+            return {"verified": False, "error": "Face not detected", "message": "Please ensure your face is clearly visible in the camera"}
+            
+        # Check if pose landmarks were detected
+        if not results.pose_landmarks:
+            logging.warning("Body pose not detected with MediaPipe Holistic - upper body may not be visible")
+            return {"verified": False, "error": "Body pose not detected", "message": "Please ensure your upper body is visible in the camera"}
         
         # Get face and upper body landmarks
         face_landmarks = results.face_landmarks.landmark
@@ -330,11 +339,15 @@ def register():
                 return redirect(url_for("register"))
             
             # Verify user identity (face and body alignment)
-            identity_verified = verify_user_identity(image)
+            identity_result = verify_user_identity(image)
             
             # For registration, we'll make this less strict to handle test images and cases
             # where upper body might not be visible
-            if not identity_verified:
+            if isinstance(identity_result, dict) and not identity_result.get("verified", False):
+                error_message = identity_result.get("message", "Identity verification failed")
+                logging.warning(f"Identity verification during registration failed for user {username}: {error_message}, but proceeding")
+                # Don't return or block registration - continue with the process
+            elif not identity_result:
                 logging.warning(f"Identity verification during registration failed for user {username}, but proceeding")
                 # Don't return or block registration - continue with the process
             
@@ -405,10 +418,14 @@ def login():
                 return redirect(url_for("login"))
             
             # Verify user identity (face and body alignment)
-            identity_verified = verify_user_identity(image)
+            identity_result = verify_user_identity(image)
             
             # For automated testing and to handle test images that might not show full upper body
-            if not identity_verified:
+            if isinstance(identity_result, dict) and not identity_result.get("verified", False):
+                error_message = identity_result.get("message", "Identity verification failed")
+                logging.warning(f"Identity verification during login failed for user {username}: {error_message}, but proceeding")
+                # We'll still allow the login flow to continue for test purposes
+            elif not identity_result:
                 logging.warning(f"Identity verification during login failed for user {username}, but proceeding")
                 # We'll still allow the login flow to continue for test purposes
             
@@ -576,10 +593,8 @@ def recognize_gesture():
         binding = binding_map.get(gesture, None)
         
         # Implement cooldown mechanism to prevent repeated gestures
-        # Use a cache to store last execution time for each gesture per user
-        # Initialize the cache as a module-level variable if it doesn't exist
-        if not hasattr(recognize_gesture, 'gesture_cache'):
-            recognize_gesture.gesture_cache = {}
+        # Use the global gesture_cache to store last execution time for each gesture per user
+        global gesture_cache
             
         # Generate a cache key based on user_id (if provided) and gesture
         cache_key = f"{user_id or 'anonymous'}:{gesture}"
@@ -587,15 +602,15 @@ def recognize_gesture():
         cooldown_active = False
         
         # Check if we need to apply cooldown (2 seconds between same gesture)
-        if cache_key in recognize_gesture.gesture_cache:
-            last_time = recognize_gesture.gesture_cache[cache_key]
+        if cache_key in gesture_cache:
+            last_time = gesture_cache[cache_key]
             if current_time - last_time < 2.0:  # 2-second cooldown
                 cooldown_active = True
                 logging.info(f"Cooldown active for gesture {gesture} (user {user_id})")
             
         # Update the cache with current time if not in cooldown or gesture is new
-        if not cooldown_active or cache_key not in recognize_gesture.gesture_cache:
-            recognize_gesture.gesture_cache[cache_key] = current_time
+        if not cooldown_active or cache_key not in gesture_cache:
+            gesture_cache[cache_key] = current_time
         
         return jsonify({
             "gesture": gesture,
