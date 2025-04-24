@@ -380,6 +380,7 @@ def register():
             db.session.commit()
             
             logging.info(f"User registered successfully: {username}")
+            logging.debug(f"Redirecting to: {url_for('login')}")
             flash("Registration successful! You can now log in.", "success")
             return redirect(url_for("login"))
         

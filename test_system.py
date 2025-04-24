@@ -115,10 +115,12 @@ class TestGestureFaceSystem(unittest.TestCase):
             
             if response.status_code == 302:
                 # If redirected, make sure it's to the login page
-                self.assertEqual(response.headers["Location"], "/login")
+                logging.info(f"Redirect location: {response.headers.get('Location')}")
+                self.assertEqual(response.headers.get("Location"), "/login")
                 logging.info(f"User {self.test_username} registered successfully")
             else:
                 # If not redirected, check for success message in response
+                logging.info(f"Registration response status: {response.status_code}, no redirect")
                 self.assertIn("Registration successful", response.text)
                 logging.info(f"User {self.test_username} registration form submitted")
     
