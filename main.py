@@ -420,6 +420,107 @@ def add_gesture():
         logging.error(f"Error adding gesture data: {e}")
         return jsonify({"success": False, "message": f"Failed to add gesture data: {str(e)}"}), 500
 
+@app.route("/api/gestures/recognize", methods=["POST"])
+def recognize_gesture():
+    """Recognize a gesture from hand keypoints."""
+    try:
+        data = request.json
+        keypoints = data.get("keypoints")
+        
+        if not keypoints:
+            return jsonify({"success": False, "message": "No keypoints provided"}), 400
+        
+        # Load the ONNX model and metadata
+        onnx_model, metadata = load_model_and_metadata()
+        
+        if not onnx_model or not metadata:
+            # If we don't have a model yet, return a default response
+            return jsonify({
+                "gesture": "unknown",
+                "confidence": 0.0,
+                "binding": None
+            })
+        
+        # Prepare input for inference
+        keypoints_array = np.array(keypoints, dtype=np.float32).flatten()
+        
+        # Apply same preprocessing as during training
+        keypoints_array = preprocess_keypoints(keypoints_array, metadata)
+        
+        # Convert to tensor format required by ONNX Runtime
+        input_data = keypoints_array.reshape(1, -1).astype(np.float32)
+        
+        # Run inference
+        input_name = onnx_model.get_inputs()[0].name
+        output_name = onnx_model.get_outputs()[0].name
+        result = onnx_model.run([output_name], {input_name: input_data})
+        
+        # Process the result
+        probabilities = result[0][0]
+        predicted_class = np.argmax(probabilities)
+        confidence = probabilities[predicted_class]
+        
+        # Map predicted class index to gesture label and binding
+        id2lbl = metadata.get("id2lbl", {})
+        binding_map = metadata.get("binding_map", {})
+        
+        gesture = id2lbl.get(str(predicted_class), "unknown")
+        binding = binding_map.get(gesture, None)
+        
+        return jsonify({
+            "gesture": gesture,
+            "confidence": float(confidence),
+            "binding": binding
+        })
+        
+    except Exception as e:
+        logging.error(f"Error recognizing gesture: {e}")
+        return jsonify({"success": False, "message": f"Failed to recognize gesture: {str(e)}"}), 500
+
+def load_model_and_metadata():
+    """Load the gesture recognition model and metadata."""
+    try:
+        # Check if model and metadata files exist
+        model_path = "attached_assets/gesture_clf_pt.onnx"
+        metadata_path = "attached_assets/meta_pt.pkl"
+        
+        if not os.path.exists(model_path) or not os.path.exists(metadata_path):
+            logging.warning("Model or metadata file not found")
+            return None, None
+            
+        # Load ONNX model
+        import onnxruntime
+        onnx_model = onnxruntime.InferenceSession(model_path)
+        
+        # Load metadata
+        with open(metadata_path, "rb") as f:
+            metadata = pickle.load(f)
+            
+        return onnx_model, metadata
+        
+    except Exception as e:
+        logging.error(f"Error loading model and metadata: {e}")
+        return None, None
+
+def preprocess_keypoints(keypoints, metadata):
+    """Preprocess keypoints according to the same procedure used during training."""
+    try:
+        # Apply normalization from training
+        if "normalizer" in metadata:
+            # Try to use the normalizer from metadata
+            normalizer = metadata["normalizer"]
+            keypoints = normalizer.transform([keypoints])[0]
+        else:
+            # If no normalizer is available, use simple scaling (0-1)
+            keypoints = (keypoints - np.min(keypoints)) / (np.max(keypoints) - np.min(keypoints) + 1e-8)
+            
+        return keypoints
+        
+    except Exception as e:
+        logging.error(f"Error preprocessing keypoints: {e}")
+        # Return the original keypoints if preprocessing fails
+        return keypoints
+
 @app.route("/api/train", methods=["POST"])
 def train_model():
     """Trigger model training."""
@@ -434,21 +535,35 @@ def train_model():
         db.session.add(training_session)
         db.session.commit()
         
-        # Here we would normally call the actual training function
-        # For now, we'll simulate it
-        
-        # Update the training session
-        training_session.end_time = datetime.utcnow()
-        training_session.status = "completed"
-        training_session.accuracy = 0.95  # Mock accuracy value
-        training_session.num_samples = 100  # Mock sample count
-        
-        db.session.commit()
-        
+        try:
+            # Import the training function from the attached script
+            from attached_assets.train_model_pt import train_model_pt
+            
+            # Run the training
+            result = train_model_pt(epochs=60, batch_size=64, lr=0.001)
+            
+            # Update the training session with the results
+            training_session.end_time = datetime.utcnow()
+            training_session.status = "completed"
+            training_session.accuracy = result.get("accuracy", 0.0)
+            training_session.num_samples = result.get("num_samples", 0)
+            
+        except Exception as train_err:
+            logging.error(f"Training error: {train_err}")
+            
+            # Update the training session with the error
+            training_session.end_time = datetime.utcnow()
+            training_session.status = "failed"
+            training_session.error_message = str(train_err)
+            
+        finally:
+            db.session.commit()
+            
         return jsonify({
-            "success": True,
-            "message": "Model training completed successfully",
-            "session_id": training_session.id
+            "success": training_session.status == "completed",
+            "message": "Model training completed" if training_session.status == "completed" else "Model training failed",
+            "session_id": training_session.id,
+            "status": training_session.status
         })
         
     except Exception as e:
