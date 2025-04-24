@@ -65,17 +65,18 @@
             </div>
             <div class="card-body">
                 {% if gestures %}
-                <div class="table-responsive">
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
                     <table class="table table-hover table-sm">
-                        <thead class="table-dark">
+                        <thead class="table-dark sticky-top" style="position: sticky; top: 0; z-index: 1;">
                             <tr>
                                 <th>Gesture</th>
                                 <th>Binding</th>
+                                <th class="text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for label, binding in gestures %}
-                            <tr>
+                            <tr data-gesture-label="{{ label }}" data-gesture-binding="{{ binding }}">
                                 <td>
                                     {% if 'left' in label %}
                                     <i class="fas fa-hand-point-left me-2 text-primary"></i>
@@ -91,6 +92,12 @@
                                     {{ label }}
                                 </td>
                                 <td><code>{{ binding }}</code></td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-danger delete-gesture-btn"
+                                            data-label="{{ label }}" data-binding="{{ binding }}">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -248,8 +255,56 @@
                             </div>
                             <div class="mb-3">
                                 <label for="gesture_binding" class="form-label">Binding (Action)</label>
-                                <input type="text" class="form-control" id="gesture_binding" name="gesture_binding" required
-                                       placeholder="e.g., previous_page, scroll_up">
+                                <div class="input-group">
+                                    <select class="form-select" id="predefined_bindings" onchange="updateBindingInput(this.value)">
+                                        <option value="" selected>Select a predefined binding...</option>
+                                        <optgroup label="Keyboard Keys">
+                                            <option value="key_left">Left Arrow</option>
+                                            <option value="key_right">Right Arrow</option>
+                                            <option value="key_up">Up Arrow</option>
+                                            <option value="key_down">Down Arrow</option>
+                                            <option value="key_space">Space</option>
+                                            <option value="key_enter">Enter</option>
+                                            <option value="key_tab">Tab</option>
+                                            <option value="key_esc">Escape</option>
+                                            <option value="key_backspace">Backspace</option>
+                                        </optgroup>
+                                        <optgroup label="Media Controls">
+                                            <option value="media_play_pause">Play/Pause Media</option>
+                                            <option value="media_next">Next Track</option>
+                                            <option value="media_prev">Previous Track</option>
+                                            <option value="media_volume_up">Volume Up</option>
+                                            <option value="media_volume_down">Volume Down</option>
+                                            <option value="media_mute">Mute Volume</option>
+                                        </optgroup>
+                                        <optgroup label="OS Actions">
+                                            <option value="os_window_maximize">Maximize Window</option>
+                                            <option value="os_window_minimize">Minimize Window</option>
+                                            <option value="os_window_close">Close Window</option>
+                                            <option value="os_screenshot">Take Screenshot</option>
+                                            <option value="os_lock_screen">Lock Screen</option>
+                                        </optgroup>
+                                        <optgroup label="App Actions">
+                                            <option value="app_copy">Copy (Ctrl+C)</option>
+                                            <option value="app_paste">Paste (Ctrl+V)</option>
+                                            <option value="app_cut">Cut (Ctrl+X)</option>
+                                            <option value="app_save">Save (Ctrl+S)</option>
+                                            <option value="app_undo">Undo (Ctrl+Z)</option>
+                                            <option value="app_redo">Redo (Ctrl+Y)</option>
+                                        </optgroup>
+                                        <optgroup label="Browser Actions">
+                                            <option value="browser_back">Browser Back</option>
+                                            <option value="browser_forward">Browser Forward</option>
+                                            <option value="browser_refresh">Browser Refresh</option>
+                                            <option value="browser_new_tab">New Tab</option>
+                                            <option value="browser_close_tab">Close Tab</option>
+                                        </optgroup>
+                                        <option value="custom">Custom Binding...</option>
+                                    </select>
+                                    <input type="text" class="form-control" id="gesture_binding" name="gesture_binding" required
+                                           placeholder="e.g., previous_page, scroll_up">
+                                </div>
+                                <small class="form-text text-muted">Select a predefined binding or enter a custom one</small>
                             </div>
                             <div class="alert alert-info">
                                 <i class="fas fa-info-circle me-2"></i>
@@ -748,6 +803,59 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Error adding gesture. See console for details.');
         });
     });
+    
+    // Setup delete gesture buttons
+    document.querySelectorAll('.delete-gesture-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const label = this.getAttribute('data-label');
+            const binding = this.getAttribute('data-binding');
+            deleteGesture(label, binding);
+        });
+    });
+    
+    // Function to update the binding input when a predefined binding is selected
+    function updateBindingInput(value) {
+        const bindingInput = document.getElementById('gesture_binding');
+        if (value && value !== 'custom') {
+            bindingInput.value = value;
+            bindingInput.readOnly = true;
+        } else {
+            bindingInput.value = '';
+            bindingInput.readOnly = false;
+            bindingInput.focus();
+        }
+    }
+    
+    // Function to delete a gesture
+    function deleteGesture(label, binding) {
+        if (confirm(`Are you sure you want to delete the gesture "${label}" with binding "${binding}"?`)) {
+            // Send delete request to API
+            fetch('/api/gestures/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    label: label,
+                    binding: binding
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addEvent(`Deleted gesture "${label}" with binding "${binding}"`);
+                    // Reload page to reflect changes
+                    window.location.reload();
+                } else {
+                    alert(`Failed to delete gesture: ${data.message}`);
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting gesture:', error);
+                alert('Error deleting gesture. Please try again.');
+            });
+        }
+    }
 });
 
 // Trigger model training
