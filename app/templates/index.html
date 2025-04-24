@@ -12,12 +12,22 @@
         <p class="lead">
             A powerful backend API for face authentication and gesture recognition with model retraining capabilities
         </p>
+        <div class="d-flex justify-content-center mt-4">
+            <a href="/register" class="btn btn-primary btn-lg me-3">
+                <i class="fas fa-user-plus me-2"></i>
+                Register
+            </a>
+            <a href="/login" class="btn btn-outline-primary btn-lg">
+                <i class="fas fa-sign-in-alt me-2"></i>
+                Login
+            </a>
+        </div>
     </div>
 </div>
 
 <div class="row mb-5">
     <div class="col-md-4">
-        <div class="card h-100">
+        <div class="card h-100 gesture-card">
             <div class="card-body text-center">
                 <i class="fas fa-user-shield fa-3x mb-3 text-primary"></i>
                 <h3 class="card-title">Face Authentication</h3>
@@ -25,10 +35,13 @@
                     Securely authenticate users with facial recognition, checking identity every 10 frames from video streams.
                 </p>
             </div>
+            <div class="card-footer text-center">
+                <a href="/register" class="btn btn-sm btn-outline-primary">Try it now</a>
+            </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card h-100">
+        <div class="card h-100 gesture-card">
             <div class="card-body text-center">
                 <i class="fas fa-hand-point-up fa-3x mb-3 text-primary"></i>
                 <h3 class="card-title">Gesture Recognition</h3>
@@ -36,10 +49,13 @@
                     Recognize hand gestures in real-time using state-of-the-art machine learning models.
                 </p>
             </div>
+            <div class="card-footer text-center">
+                <a href="/dashboard" class="btn btn-sm btn-outline-primary">View gestures</a>
+            </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card h-100">
+        <div class="card h-100 gesture-card">
             <div class="card-body text-center">
                 <i class="fas fa-brain fa-3x mb-3 text-primary"></i>
                 <h3 class="card-title">Model Retraining</h3>
@@ -47,71 +63,215 @@
                     Continuously improve gesture recognition with new data and automatic model retraining.
                 </p>
             </div>
+            <div class="card-footer text-center">
+                <button class="btn btn-sm btn-outline-primary" onclick="triggerTraining()">Train model</button>
+            </div>
         </div>
     </div>
 </div>
 
-<div class="row mt-5">
-    <div class="col-md-12">
-        <h2 class="mb-4"><i class="fas fa-code me-2"></i>API Endpoints</h2>
-        
-        <h4 class="mt-4 mb-3">Authentication</h4>
-        <div class="api-link">
-            <span class="badge bg-success method-badge me-2">POST</span>
-            <span class="endpoint">/auth/register</span>
-            <p class="mt-2 mb-0">Register a new user with face authentication</p>
+<div class="row my-5">
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="fas fa-hand-paper me-2"></i>Available Gestures</h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="gestures-table">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Gesture</th>
+                                <th>Binding</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <i class="fas fa-hand-point-left me-2"></i>
+                                    Swipe Left
+                                </td>
+                                <td><code>previous_page</code></td>
+                                <td><span class="badge bg-info">Navigate Backward</span></td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <i class="fas fa-hand-point-right me-2"></i>
+                                    Swipe Right
+                                </td>
+                                <td><code>next_page</code></td>
+                                <td><span class="badge bg-info">Navigate Forward</span></td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <i class="fas fa-hand-point-up me-2"></i>
+                                    Hand Up
+                                </td>
+                                <td><code>scroll_up</code></td>
+                                <td><span class="badge bg-info">Scroll Up</span></td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <i class="fas fa-hand-point-down me-2"></i>
+                                    Hand Down
+                                </td>
+                                <td><code>scroll_down</code></td>
+                                <td><span class="badge bg-info">Scroll Down</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
-        <div class="api-link">
-            <span class="badge bg-success method-badge me-2">POST</span>
-            <span class="endpoint">/auth/authenticate</span>
-            <p class="mt-2 mb-0">Authenticate a user with face recognition</p>
-        </div>
-        <div class="api-link">
-            <span class="badge bg-success method-badge me-2">POST</span>
-            <span class="endpoint">/auth/authenticate_frames</span>
-            <p class="mt-2 mb-0">Authenticate a user using multiple video frames</p>
-        </div>
-        <div class="api-link">
-            <span class="badge bg-primary method-badge me-2">GET</span>
-            <span class="endpoint">/auth/users</span>
-            <p class="mt-2 mb-0">Get a list of all registered users</p>
-        </div>
-        
-        <h4 class="mt-4 mb-3">Gesture Recognition</h4>
-        <div class="api-link">
-            <span class="badge bg-success method-badge me-2">POST</span>
-            <span class="endpoint">/gestures/recognize</span>
-            <p class="mt-2 mb-0">Recognize a gesture from hand keypoints</p>
-        </div>
-        <div class="api-link">
-            <span class="badge bg-success method-badge me-2">POST</span>
-            <span class="endpoint">/gestures/add_gesture</span>
-            <p class="mt-2 mb-0">Add new gesture data and trigger model retraining</p>
-        </div>
-        <div class="api-link">
-            <span class="badge bg-success method-badge me-2">POST</span>
-            <span class="endpoint">/gestures/train</span>
-            <p class="mt-2 mb-0">Manually trigger model training</p>
-        </div>
-        <div class="api-link">
-            <span class="badge bg-primary method-badge me-2">GET</span>
-            <span class="endpoint">/gestures/gestures</span>
-            <p class="mt-2 mb-0">Get a list of all registered gestures with their bindings</p>
-        </div>
-        <div class="api-link">
-            <span class="badge bg-primary method-badge me-2">GET</span>
-            <span class="endpoint">/gestures/training_status/{session_id}</span>
-            <p class="mt-2 mb-0">Get the status of a specific training session</p>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="fas fa-code me-2"></i>API Endpoints</h4>
+            </div>
+            <div class="card-body p-0">
+                <div class="accordion" id="apiAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="authenticationHeading">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" 
+                                    data-bs-target="#authenticationCollapse" aria-expanded="true" 
+                                    aria-controls="authenticationCollapse">
+                                Authentication
+                            </button>
+                        </h2>
+                        <div id="authenticationCollapse" class="accordion-collapse collapse show" 
+                             aria-labelledby="authenticationHeading" data-bs-parent="#apiAccordion">
+                            <div class="accordion-body">
+                                <div class="api-link">
+                                    <span class="badge bg-success method-badge me-2">POST</span>
+                                    <span class="endpoint">/register</span>
+                                    <p class="mt-2 mb-0">Register a new user with face authentication</p>
+                                </div>
+                                <div class="api-link">
+                                    <span class="badge bg-success method-badge me-2">POST</span>
+                                    <span class="endpoint">/login</span>
+                                    <p class="mt-2 mb-0">Authenticate a user with face recognition</p>
+                                </div>
+                                <div class="api-link">
+                                    <span class="badge bg-primary method-badge me-2">GET</span>
+                                    <span class="endpoint">/api/users</span>
+                                    <p class="mt-2 mb-0">Get a list of all registered users</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="gesturesHeading">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                    data-bs-target="#gesturesCollapse" aria-expanded="false" 
+                                    aria-controls="gesturesCollapse">
+                                Gesture Recognition
+                            </button>
+                        </h2>
+                        <div id="gesturesCollapse" class="accordion-collapse collapse" 
+                             aria-labelledby="gesturesHeading" data-bs-parent="#apiAccordion">
+                            <div class="accordion-body">
+                                <div class="api-link">
+                                    <span class="badge bg-primary method-badge me-2">GET</span>
+                                    <span class="endpoint">/api/gestures</span>
+                                    <p class="mt-2 mb-0">Get a list of all registered gestures with their bindings</p>
+                                </div>
+                                <div class="api-link">
+                                    <span class="badge bg-success method-badge me-2">POST</span>
+                                    <span class="endpoint">/api/gestures/add</span>
+                                    <p class="mt-2 mb-0">Add new gesture data and trigger model retraining</p>
+                                </div>
+                                <div class="api-link">
+                                    <span class="badge bg-success method-badge me-2">POST</span>
+                                    <span class="endpoint">/api/train</span>
+                                    <p class="mt-2 mb-0">Manually trigger model training</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
 <div class="row mt-5">
     <div class="col-md-12 text-center">
-        <a href="/docs" class="btn btn-primary btn-lg">
-            <i class="fas fa-book me-2"></i>
-            Explore Full API Documentation
+        <a href="/dashboard" class="btn btn-primary btn-lg">
+            <i class="fas fa-tachometer-alt me-2"></i>
+            Go to Dashboard
         </a>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function triggerTraining() {
+    fetch('/api/train', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Model training started successfully!');
+        } else {
+            alert('Error starting model training: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error starting model training. See console for details.');
+    });
+}
+
+// Load gestures from API
+document.addEventListener('DOMContentLoaded', () => {
+    fetch('/api/gestures')
+        .then(response => response.json())
+        .then(data => {
+            const tableBody = document.querySelector('#gestures-table tbody');
+            
+            // Clear existing rows
+            tableBody.innerHTML = '';
+            
+            // If no gestures found, show default gestures
+            if (!data.gestures || data.gestures.length === 0) {
+                return;
+            }
+            
+            // Add gestures to table
+            data.gestures.forEach(gesture => {
+                const row = document.createElement('tr');
+                
+                // Map gesture names to icons
+                let icon = 'fa-hand-paper';
+                if (gesture.label.includes('left')) icon = 'fa-hand-point-left';
+                if (gesture.label.includes('right')) icon = 'fa-hand-point-right';
+                if (gesture.label.includes('up')) icon = 'fa-hand-point-up';
+                if (gesture.label.includes('down')) icon = 'fa-hand-point-down';
+                
+                row.innerHTML = `
+                    <td>
+                        <i class="fas ${icon} me-2"></i>
+                        ${gesture.label}
+                    </td>
+                    <td><code>${gesture.binding}</code></td>
+                    <td><span class="badge bg-info">${gesture.binding.replace(/_/g, ' ')}</span></td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching gestures:', error);
+        });
+});
+</script>
 {% endblock %}
