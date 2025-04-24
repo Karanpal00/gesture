@@ -290,7 +290,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.3.1632795355/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1635989137/holistic.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Main webcam for gesture recognition
@@ -311,48 +311,65 @@ document.addEventListener('DOMContentLoaded', function() {
     
     let mainStream = null;
     let gestureStream = null;
-    let hands = null;
+    let holistic = null;
     let isModelReady = false;
     let capturedHandKeypoints = null;
     
-    // Initialize MediaPipe Hands model
-    function initHandsModel() {
-        hands = new Hands({
+    // Initialize MediaPipe Holistic model
+    function initHolisticModel() {
+        holistic = new Holistic({
             locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.3.1632795355/${file}`;
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1635989137/${file}`;
             }
         });
         
-        hands.setOptions({
-            maxNumHands: 1,
+        holistic.setOptions({
             modelComplexity: 1,
+            smoothLandmarks: true,
+            enableSegmentation: false,
+            smoothSegmentation: false,
+            refineFaceLandmarks: true,
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5
         });
         
-        hands.onResults(onHandsResults);
+        holistic.onResults(onHolisticResults);
         
-        // Only enable the capture button when hands are ready
-        hands.initialize().then(() => {
+        // Only enable the capture button when holistic model is ready
+        holistic.initialize().then(() => {
             isModelReady = true;
             captureGestureBtn.disabled = false;
-            addEvent('Hand tracking model loaded successfully');
+            addEvent('Holistic tracking model loaded successfully');
         });
     }
     
-    // Handle results from MediaPipe Hands
-    function onHandsResults(results) {
+    // Handle results from MediaPipe Holistic
+    function onHolisticResults(results) {
         const ctx = overlay.getContext('2d');
         ctx.clearRect(0, 0, overlay.width, overlay.height);
         
-        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-            const landmarks = results.multiHandLandmarks[0];
-            
-            // Draw hand landmarks
-            drawHandLandmarks(ctx, landmarks);
+        // Draw face landmarks if available
+        if (results.faceLandmarks) {
+            drawFaceLandmarks(ctx, results.faceLandmarks);
+        }
+        
+        // Draw pose landmarks if available
+        if (results.poseLandmarks) {
+            drawPoseLandmarks(ctx, results.poseLandmarks);
+        }
+        
+        // Process hand landmarks if available
+        if (results.rightHandLandmarks) {
+            drawHandLandmarks(ctx, results.rightHandLandmarks, 'right');
             
             // Extract keypoints and recognize gesture
-            const keypoints = extractKeypoints(landmarks);
+            const keypoints = extractKeypoints(results.rightHandLandmarks);
+            recognizeGesture(keypoints);
+        } else if (results.leftHandLandmarks) {
+            drawHandLandmarks(ctx, results.leftHandLandmarks, 'left');
+            
+            // Extract keypoints and recognize gesture
+            const keypoints = extractKeypoints(results.leftHandLandmarks);
             recognizeGesture(keypoints);
         } else {
             detectedGesture.textContent = 'No hand detected';
@@ -370,11 +387,73 @@ document.addEventListener('DOMContentLoaded', function() {
         return keypoints;
     }
     
+    // Draw face landmarks on canvas
+    function drawFaceLandmarks(ctx, landmarks) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        
+        // Draw a subset of face landmarks for simplicity
+        for (let i = 0; i < landmarks.length; i += 5) {
+            const landmark = landmarks[i];
+            ctx.beginPath();
+            ctx.arc(
+                landmark.x * overlay.width,
+                landmark.y * overlay.height,
+                2,
+                0,
+                2 * Math.PI
+            );
+            ctx.fill();
+        }
+    }
+    
+    // Draw pose landmarks on canvas
+    function drawPoseLandmarks(ctx, landmarks) {
+        // Draw pose connections
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(100, 200, 255, 0.7)';
+        
+        // Draw main body connections
+        const connections = [
+            [11, 12], // shoulders
+            [11, 13], [13, 15], // left arm
+            [12, 14], [14, 16], // right arm
+            [11, 23], [12, 24], // body to hips
+            [23, 24], // hips
+        ];
+        
+        for (const connection of connections) {
+            const [i, j] = connection;
+            if (landmarks[i].visibility > 0.5 && landmarks[j].visibility > 0.5) {
+                ctx.beginPath();
+                ctx.moveTo(landmarks[i].x * overlay.width, landmarks[i].y * overlay.height);
+                ctx.lineTo(landmarks[j].x * overlay.width, landmarks[j].y * overlay.height);
+                ctx.stroke();
+            }
+        }
+        
+        // Draw pose landmarks
+        ctx.fillStyle = '#4080FF';
+        for (let i = 0; i < landmarks.length; i++) {
+            // Focus on upper body landmarks (11-16 are shoulders and arms)
+            if (i >= 11 && i <= 16 && landmarks[i].visibility > 0.5) {
+                ctx.beginPath();
+                ctx.arc(
+                    landmarks[i].x * overlay.width,
+                    landmarks[i].y * overlay.height,
+                    5,
+                    0,
+                    2 * Math.PI
+                );
+                ctx.fill();
+            }
+        }
+    }
+    
     // Draw hand landmarks on canvas
-    function drawHandLandmarks(ctx, landmarks) {
+    function drawHandLandmarks(ctx, landmarks, handType) {
         // Draw connections
         ctx.lineWidth = 3;
-        ctx.strokeStyle = '#00FF00';
+        ctx.strokeStyle = handType === 'left' ? '#FF8000' : '#00FF80';
         
         // Draw hand connections (simplified)
         const connections = [
@@ -395,7 +474,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Draw landmarks
-        ctx.fillStyle = '#FF0000';
+        ctx.fillStyle = handType === 'left' ? '#FFA040' : '#40FFA0';
         for (const landmark of landmarks) {
             ctx.beginPath();
             ctx.arc(
@@ -407,6 +486,15 @@ document.addEventListener('DOMContentLoaded', function() {
             );
             ctx.fill();
         }
+        
+        // Add hand type label
+        ctx.font = '16px Arial';
+        ctx.fillStyle = handType === 'left' ? '#FFA040' : '#40FFA0';
+        ctx.fillText(
+            `${handType.toUpperCase()} HAND`, 
+            landmarks[0].x * overlay.width - 40, 
+            landmarks[0].y * overlay.height - 20
+        );
     }
     
     // Recognize gesture using keypoints
@@ -461,9 +549,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 overlay.width = webcam.videoWidth;
                 overlay.height = webcam.videoHeight;
                 
-                // Initialize hand tracking if not already
+                // Initialize holistic tracking if not already
                 if (!isModelReady) {
-                    initHandsModel();
+                    initHolisticModel();
                 }
                 
                 // Start processing frames
@@ -492,12 +580,12 @@ document.addEventListener('DOMContentLoaded', function() {
         addEvent('Webcam stopped');
     });
     
-    // Process video frames for hand tracking
+    // Process video frames for holistic tracking
     function processFrames() {
         if (!mainStream) return;
         
-        if (hands && webcam.readyState === 4) {
-            hands.send({ image: webcam });
+        if (holistic && webcam.readyState === 4) {
+            holistic.send({ image: webcam });
         }
         
         requestAnimationFrame(processFrames);
@@ -533,9 +621,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 gestureOverlay.width = gestureWebcam.videoWidth;
                 gestureOverlay.height = gestureWebcam.videoHeight;
                 
-                // Initialize hands if not already
+                // Initialize holistic model if not already
                 if (!isModelReady) {
-                    initHandsModel();
+                    initHolisticModel();
                 }
             });
         } catch (err) {
@@ -553,8 +641,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Reset the form
         document.getElementById('addGestureForm').reset();
-        capturedKeypoints = null;
-        capturedHandKeypoints.classList.add('d-none');
+        capturedHandKeypoints = null;
+        
+        // Fix: check if capturedKeypoints element exists before accessing it
+        if (capturedKeypoints) {
+            capturedKeypoints.classList.add('d-none');
+        }
+        
         saveGestureBtn.disabled = true;
     });
     
@@ -567,21 +660,44 @@ document.addEventListener('DOMContentLoaded', function() {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(gestureWebcam, 0, 0, canvas.width, canvas.height);
         
-        // Process image with MediaPipe Hands
-        hands.send({ image: gestureWebcam }).then(() => {
-            if (hands.results.multiHandLandmarks && hands.results.multiHandLandmarks.length > 0) {
+        // Process image with MediaPipe Holistic
+        holistic.send({ image: gestureWebcam }).then(() => {
+            // Check for hand landmarks (prioritize right hand, then left hand)
+            let handLandmarks = null;
+            let handType = '';
+            
+            if (holistic.results.rightHandLandmarks) {
+                handLandmarks = holistic.results.rightHandLandmarks;
+                handType = 'right';
+            } else if (holistic.results.leftHandLandmarks) {
+                handLandmarks = holistic.results.leftHandLandmarks;
+                handType = 'left';
+            }
+            
+            if (handLandmarks) {
                 // Extract keypoints
-                capturedHandKeypoints = extractKeypoints(hands.results.multiHandLandmarks[0]);
+                capturedHandKeypoints = extractKeypoints(handLandmarks);
                 
-                // Draw hand landmarks on overlay
-                drawHandLandmarks(
-                    gestureOverlay.getContext('2d'),
-                    hands.results.multiHandLandmarks[0]
-                );
+                // Clear canvas and draw landmarks
+                const overlayCtx = gestureOverlay.getContext('2d');
+                overlayCtx.clearRect(0, 0, gestureOverlay.width, gestureOverlay.height);
+                
+                // Draw face and pose for context
+                if (holistic.results.faceLandmarks) {
+                    drawFaceLandmarks(overlayCtx, holistic.results.faceLandmarks);
+                }
+                if (holistic.results.poseLandmarks) {
+                    drawPoseLandmarks(overlayCtx, holistic.results.poseLandmarks);
+                }
+                
+                // Draw hand landmarks
+                drawHandLandmarks(overlayCtx, handLandmarks, handType);
                 
                 // Show success message
                 capturedKeypoints.classList.remove('d-none');
                 saveGestureBtn.disabled = false;
+                
+                addEvent(`Captured ${handType} hand gesture`);
             } else {
                 alert('No hand detected. Please position your hand in front of the camera.');
             }

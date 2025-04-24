@@ -105,49 +105,129 @@ class TrainingSession(db.Model):
 with app.app_context():
     db.create_all()
 
-# Face processing utilities
+# Face processing utilities with MediaPipe
+import mediapipe as mp
+
+# Initialize MediaPipe Face Mesh
+mp_face_mesh = mp.solutions.face_mesh
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+mp_holistic = mp.solutions.holistic
+
+# Initialize face mesh with high accuracy settings
+face_mesh = mp_face_mesh.FaceMesh(
+    static_image_mode=True,
+    max_num_faces=1,
+    refine_landmarks=True,
+    min_detection_confidence=0.5
+)
+
+# Initialize holistic model for combined face and pose detection
+holistic = mp_holistic.Holistic(
+    static_image_mode=True,
+    model_complexity=2,
+    enable_segmentation=True,
+    refine_face_landmarks=True,
+    min_detection_confidence=0.5
+)
+
 def extract_face_encoding(image):
-    """Extract face encoding from an image using OpenCV."""
+    """Extract face encoding from an image using MediaPipe Face Mesh."""
     try:
-        # Convert to grayscale
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        # Convert color space from BGR to RGB
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         
-        # Load OpenCV's pre-trained face detector
-        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        # Process the image with MediaPipe Face Mesh
+        results = face_mesh.process(rgb_image)
         
-        # Detect faces
-        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-        
-        if len(faces) == 0:
+        # Check if any face was detected
+        if not results.multi_face_landmarks or len(results.multi_face_landmarks) == 0:
+            logging.warning("No face detected with MediaPipe Face Mesh")
             return None
         
-        # Get the first face
-        (x, y, w, h) = faces[0]
+        # Extract the first face landmarks
+        face_landmarks = results.multi_face_landmarks[0]
         
-        # Extract face region
-        face_roi = gray[y:y+h, x:x+w]
+        # Convert the landmarks to a numpy array (encoding)
+        encoding = []
+        height, width, _ = image.shape
+        for landmark in face_landmarks.landmark:
+            # Normalize coordinates to ensure consistent encoding regardless of image size
+            x = landmark.x
+            y = landmark.y
+            z = landmark.z
+            # Append normalized coordinates to encoding
+            encoding.extend([x, y, z])
         
-        # Resize to a standard size
-        face_roi = cv2.resize(face_roi, (128, 128))
-        
-        # Flatten and normalize
-        face_encoding = face_roi.flatten().astype(np.float32) / 255.0
+        # Convert to numpy array
+        face_encoding = np.array(encoding, dtype=np.float32)
         
         return face_encoding
     except Exception as e:
-        logging.error(f"Error extracting face encoding: {e}")
+        logging.error(f"Error extracting face encoding with MediaPipe: {e}")
         return None
 
-def compare_face_encodings(encoding1, encoding2, tolerance=0.6):
+def verify_user_identity(image):
+    """Verify that face and body belong to the same person using MediaPipe Holistic."""
+    try:
+        # Convert color space from BGR to RGB
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        
+        # Process the image with MediaPipe Holistic
+        results = holistic.process(rgb_image)
+        
+        # Check if both face and pose were detected
+        if not results.face_landmarks or not results.pose_landmarks:
+            logging.warning("Face or body pose not detected with MediaPipe Holistic")
+            return False
+        
+        # Get face and upper body landmarks
+        face_landmarks = results.face_landmarks.landmark
+        pose_landmarks = results.pose_landmarks.landmark
+        
+        # Check basic alignment between face and body
+        # Extract nose landmark from face and calculate center
+        nose_landmark = face_landmarks[1]  # Nose tip
+        
+        # Extract shoulder landmarks from pose
+        left_shoulder = pose_landmarks[11]  # Left shoulder
+        right_shoulder = pose_landmarks[12]  # Right shoulder
+        
+        # Calculate center of shoulders
+        shoulder_center_x = (left_shoulder.x + right_shoulder.x) / 2
+        shoulder_center_y = (left_shoulder.y + right_shoulder.y) / 2
+        
+        # Check if nose is approximately above the center of shoulders
+        # Allow some tolerance for head rotation
+        horizontal_diff = abs(nose_landmark.x - shoulder_center_x)
+        
+        # If the horizontal difference is too large, the face might not belong to the body
+        return horizontal_diff < 0.25  # Threshold value can be adjusted
+        
+    except Exception as e:
+        logging.error(f"Error verifying identity with MediaPipe Holistic: {e}")
+        return False
+
+def compare_face_encodings(encoding1, encoding2, tolerance=0.5):
     """Compare two face encodings and return True if they match."""
     if encoding1 is None or encoding2 is None:
         return False
     
+    # Ensure encodings have the same shape
+    min_length = min(len(encoding1), len(encoding2))
+    encoding1 = encoding1[:min_length]
+    encoding2 = encoding2[:min_length]
+    
     # Calculate Euclidean distance
     distance = np.linalg.norm(encoding1 - encoding2)
     
-    # Convert distance to similarity score
-    similarity = 1.0 / (1.0 + distance)
+    # Convert distance to similarity score (inverse relationship - smaller distance means higher similarity)
+    # Scale based on the number of landmarks (more landmarks = potentially higher distance)
+    scaled_distance = distance / (min_length ** 0.5)
+    similarity = 1.0 / (1.0 + scaled_distance)
+    
+    # Log similarity score for debugging
+    logging.debug(f"Face comparison - Distance: {distance}, Scaled: {scaled_distance}, Similarity: {similarity}")
     
     # Check if similarity is above threshold
     match = similarity >= (1 - tolerance)
@@ -228,10 +308,15 @@ def register():
             flash("Please fill all fields", "danger")
             return redirect(url_for("register"))
         
-        # Check if username already exists
-        existing_user = User.query.filter_by(username=username).first()
-        if existing_user:
+        # Check if username or email already exists
+        existing_username = User.query.filter_by(username=username).first()
+        if existing_username:
             flash("Username already taken", "danger")
+            return redirect(url_for("register"))
+            
+        existing_email = User.query.filter_by(email=email).first()
+        if existing_email:
+            flash("Email already registered", "danger")
             return redirect(url_for("register"))
         
         try:
@@ -244,11 +329,18 @@ def register():
                 flash("Invalid image format", "danger")
                 return redirect(url_for("register"))
             
-            # Extract face encoding
+            # Verify user identity (face and body alignment)
+            identity_verified = verify_user_identity(image)
+            
+            if not identity_verified:
+                flash("Identity verification failed. Please ensure your face and upper body are visible.", "danger")
+                return redirect(url_for("register"))
+            
+            # Extract face encoding using MediaPipe Face Mesh
             face_encoding = extract_face_encoding(image)
             
             if face_encoding is None:
-                flash("No face detected in the image", "danger")
+                flash("No face detected in the image. Please try again with a clearer image.", "danger")
                 return redirect(url_for("register"))
             
             # Serialize face encoding
@@ -272,6 +364,7 @@ def register():
             db.session.add(new_user)
             db.session.commit()
             
+            logging.info(f"User registered successfully: {username}")
             flash("Registration successful! You can now log in.", "success")
             return redirect(url_for("login"))
         
@@ -309,17 +402,27 @@ def login():
                 flash("Invalid image format", "danger")
                 return redirect(url_for("login"))
             
-            # Extract face encoding
+            # Verify user identity (face and body alignment)
+            identity_verified = verify_user_identity(image)
+            
+            if not identity_verified:
+                flash("Identity verification failed. Please ensure your face and upper body are visible.", "danger")
+                return redirect(url_for("login"))
+            
+            # Extract face encoding using MediaPipe Face Mesh
             face_encoding = extract_face_encoding(image)
             
             if face_encoding is None:
-                flash("No face detected in the image", "danger")
+                flash("No face detected in the image. Please try again with a clearer image.", "danger")
                 return redirect(url_for("login"))
             
             # Compare with stored encoding
             stored_encoding = pickle.loads(user.face_encodings)
             
             is_match = compare_face_encodings(face_encoding, stored_encoding)
+            
+            # Log authentication attempt
+            logging.info(f"Login attempt for user {username}: {'Success' if is_match else 'Failed'}")
             
             if is_match:
                 # Update last login
@@ -329,7 +432,7 @@ def login():
                 flash("Login successful!", "success")
                 return redirect(url_for("dashboard"))
             else:
-                flash("Face authentication failed", "danger")
+                flash("Face authentication failed. Please try again.", "danger")
                 return redirect(url_for("login"))
         
         except Exception as e:
