@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Gesture & Face Authentication API{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto text-center mb-5">
+        <h1 class="display-4">
+            <i class="fas fa-hand-sparkles me-3 text-primary"></i>
+            Gesture & Face Authentication API
+        </h1>
+        <p class="lead">
+            A powerful backend API for face authentication and gesture recognition with model retraining capabilities
+        </p>
+    </div>
+</div>
+
+<div class="row mb-5">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-user-shield fa-3x mb-3 text-primary"></i>
+                <h3 class="card-title">Face Authentication</h3>
+                <p class="card-text">
+                    Securely authenticate users with facial recognition, checking identity every 10 frames from video streams.
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-hand-point-up fa-3x mb-3 text-primary"></i>
+                <h3 class="card-title">Gesture Recognition</h3>
+                <p class="card-text">
+                    Recognize hand gestures in real-time using state-of-the-art machine learning models.
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-brain fa-3x mb-3 text-primary"></i>
+                <h3 class="card-title">Model Retraining</h3>
+                <p class="card-text">
+                    Continuously improve gesture recognition with new data and automatic model retraining.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-12">
+        <h2 class="mb-4"><i class="fas fa-code me-2"></i>API Endpoints</h2>
+        
+        <h4 class="mt-4 mb-3">Authentication</h4>
+        <div class="api-link">
+            <span class="badge bg-success method-badge me-2">POST</span>
+            <span class="endpoint">/auth/register</span>
+            <p class="mt-2 mb-0">Register a new user with face authentication</p>
+        </div>
+        <div class="api-link">
+            <span class="badge bg-success method-badge me-2">POST</span>
+            <span class="endpoint">/auth/authenticate</span>
+            <p class="mt-2 mb-0">Authenticate a user with face recognition</p>
+        </div>
+        <div class="api-link">
+            <span class="badge bg-success method-badge me-2">POST</span>
+            <span class="endpoint">/auth/authenticate_frames</span>
+            <p class="mt-2 mb-0">Authenticate a user using multiple video frames</p>
+        </div>
+        <div class="api-link">
+            <span class="badge bg-primary method-badge me-2">GET</span>
+            <span class="endpoint">/auth/users</span>
+            <p class="mt-2 mb-0">Get a list of all registered users</p>
+        </div>
+        
+        <h4 class="mt-4 mb-3">Gesture Recognition</h4>
+        <div class="api-link">
+            <span class="badge bg-success method-badge me-2">POST</span>
+            <span class="endpoint">/gestures/recognize</span>
+            <p class="mt-2 mb-0">Recognize a gesture from hand keypoints</p>
+        </div>
+        <div class="api-link">
+            <span class="badge bg-success method-badge me-2">POST</span>
+            <span class="endpoint">/gestures/add_gesture</span>
+            <p class="mt-2 mb-0">Add new gesture data and trigger model retraining</p>
+        </div>
+        <div class="api-link">
+            <span class="badge bg-success method-badge me-2">POST</span>
+            <span class="endpoint">/gestures/train</span>
+            <p class="mt-2 mb-0">Manually trigger model training</p>
+        </div>
+        <div class="api-link">
+            <span class="badge bg-primary method-badge me-2">GET</span>
+            <span class="endpoint">/gestures/gestures</span>
+            <p class="mt-2 mb-0">Get a list of all registered gestures with their bindings</p>
+        </div>
+        <div class="api-link">
+            <span class="badge bg-primary method-badge me-2">GET</span>
+            <span class="endpoint">/gestures/training_status/{session_id}</span>
+            <p class="mt-2 mb-0">Get the status of a specific training session</p>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-12 text-center">
+        <a href="/docs" class="btn btn-primary btn-lg">
+            <i class="fas fa-book me-2"></i>
+            Explore Full API Documentation
+        </a>
+    </div>
+</div>
+{% endblock %}
